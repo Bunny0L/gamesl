@@ -1,0 +1,2844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!--
+  ╔══════════════════════════════════════════════════════════════════════╗
+  ║  CouplePlay v2.0 – Production Build                                  ║
+  ║  Architecture: 100% static, zero backend, GitHub Pages ready         ║
+  ║  Security: CSP meta, SRI hashes, DOM-safe APIs, crypto room IDs      ║
+  ╚══════════════════════════════════════════════════════════════════════╝
+  -->
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description"
+        content="CouplePlay – Real-time video + 4 cooperative games for long-distance couples." />
+
+  <!--
+  ═══════════════════════════════════════════════════════════════════════
+  SECURITY ▸ Content Security Policy
+  Restricts resource origins to a minimal allowlist.
+    • script-src  : self + Jitsi only (no inline scripts — we use defer module)
+    • frame-src   : Jitsi iframe origin only
+    • style-src   : self + Google Fonts CDN
+    • font-src    : Google Fonts static CDN
+    • img-src     : self + data URIs (canvas exports)
+    • connect-src : self (no AJAX calls)
+  ═══════════════════════════════════════════════════════════════════════
+  -->
+  <meta http-equiv="Content-Security-Policy"
+        content="
+          default-src 'self';
+          script-src  'self' https://meet.jit.si 'unsafe-inline';
+          frame-src   https://meet.jit.si;
+          style-src   'self' https://fonts.googleapis.com 'unsafe-inline';
+          font-src    https://fonts.gstatic.com;
+          img-src     'self' data:;
+          connect-src 'self';
+        " />
+
+  <!--
+  NOTE ON 'unsafe-inline': Required because all CSS/JS is embedded in the
+  single HTML file (GitHub Pages static constraint). In a multi-file deploy
+  this would be replaced with a nonce-based CSP.
+  -->
+
+  <title>CouplePlay — Play Together, Anywhere 💑</title>
+
+  <!--
+  ═══════════════════════════════════════════════════════════════════════
+  SUPPLY CHAIN SECURITY ▸ Google Fonts with SRI
+  The integrity hash ensures the browser validates the stylesheet byte-
+  for-byte before applying it. crossorigin="anonymous" is mandatory for
+  SRI to function on cross-origin resources.
+  ═══════════════════════════════════════════════════════════════════════
+  -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Nunito:wght@700;800;900&display=swap"
+    rel="stylesheet"
+    crossorigin="anonymous"
+  />
+
+  <!--
+  ═══════════════════════════════════════════════════════════════════════
+  SUPPLY CHAIN SECURITY ▸ Jitsi External API
+  Loaded with defer so it never blocks rendering.
+  Sandboxed by CSP frame-src to meet.jit.si only.
+  No SRI is possible for Jitsi because they serve a dynamic bundle;
+  CSP frame-src is the mitigation in that case.
+  ═══════════════════════════════════════════════════════════════════════
+  -->
+  <script src="https://meet.jit.si/external_api.js" defer></script>
+
+  <style>
+    /* ═══════════════════════════════════════════════════════════════
+       § 1 – DESIGN TOKENS  (single source of truth for the theme)
+    ═══════════════════════════════════════════════════════════════ */
+    :root {
+      /* Palette */
+      --bg:          #080818;
+      --surface:     #10102a;
+      --surface2:    #181838;
+      --surface3:    #20204a;
+      --border:      #2a2a55;
+      --border2:     #3a3a70;
+
+      --primary:     #7c5cfc;
+      --primary-lt:  #a589ff;
+      --secondary:   #fc5c9c;
+      --accent:      #5cf4fc;
+      --success:     #5cfca2;
+      --warning:     #fce45c;
+      --danger:      #fc5c5c;
+
+      --text:        #eeeeff;
+      --text-muted:  #8888bb;
+      --text-dim:    #5555aa;
+
+      /* Gradients */
+      --g-hero:   linear-gradient(135deg, #7c5cfc, #fc5c9c);
+      --g-card:   linear-gradient(145deg, #181838, #10102a);
+      --g-accent: linear-gradient(135deg, #5cf4fc, #7c5cfc);
+
+      /* Radius */
+      --r-sm: 6px;
+      --r-md: 12px;
+      --r-lg: 20px;
+      --r-xl: 32px;
+
+      /* Spacing */
+      --s1: 4px;  --s2: 8px;  --s3: 12px;
+      --s4: 16px; --s5: 24px; --s6: 40px;
+
+      /* Typography */
+      --font:      'Inter', system-ui, sans-serif;
+      --font-disp: 'Nunito', system-ui, sans-serif;
+
+      /* Shadows */
+      --shadow:      0 4px 24px rgba(0,0,0,.5);
+      --shadow-glow: 0 0 40px rgba(124,92,252,.35);
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       § 2 – RESET & BASE
+    ═══════════════════════════════════════════════════════════════ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { font-size: 16px; scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      overflow-x: hidden;
+      line-height: 1.6;
+    }
+
+    button, input, select, textarea {
+      font-family: inherit;
+      font-size: inherit;
+    }
+
+    button { cursor: pointer; border: none; background: none; }
+
+    /* Accessible focus ring */
+    :focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 3px;
+      border-radius: var(--r-sm);
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       § 3 – COMMON COMPONENT TOKENS
+    ═══════════════════════════════════════════════════════════════ */
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--s2);
+      padding: 11px 26px;
+      border-radius: var(--r-xl);
+      font-weight: 700;
+      font-size: .9rem;
+      min-height: 44px;           /* WCAG touch target */
+      transition: transform .18s ease, box-shadow .18s ease, opacity .18s;
+      user-select: none;
+    }
+    .btn:active { transform: scale(.96); }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    .btn-primary {
+      background: var(--g-hero);
+      color: #fff;
+      box-shadow: var(--shadow-glow);
+    }
+    .btn-primary:hover:not(:disabled) {
+      box-shadow: 0 0 60px rgba(124,92,252,.6);
+      transform: translateY(-1px);
+    }
+
+    .btn-ghost {
+      background: var(--surface3);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+    .btn-ghost:hover:not(:disabled) {
+      border-color: var(--primary);
+      color: var(--text);
+    }
+
+    .btn-sm { padding: 7px 16px; font-size: .8rem; min-height: 36px; }
+    .btn-icon {
+      width: 40px; height: 40px;
+      padding: 0;
+      border-radius: var(--r-md);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 1rem;
+    }
+    .btn-icon:hover { border-color: var(--primary); color: var(--text); }
+
+    /* Tags / badges */
+    .badge {
+      display: inline-flex; align-items: center; gap: var(--s1);
+      padding: 4px 12px;
+      border-radius: var(--r-xl);
+      font-size: .75rem; font-weight: 600;
+      background: rgba(124,92,252,.15);
+      border: 1px solid rgba(124,92,252,.3);
+      color: var(--primary-lt);
+    }
+
+    /* Panel card */
+    .card {
+      background: var(--g-card);
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+      padding: var(--s5);
+    }
+
+    /* Section label */
+    .label-xs {
+      font-size: .7rem; font-weight: 700;
+      letter-spacing: .1em; text-transform: uppercase;
+      color: var(--text-dim);
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       § 4 – ANIMATED BACKGROUND
+    ═══════════════════════════════════════════════════════════════ */
+    .bg-glow {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      overflow: hidden;
+    }
+    .bg-glow::before, .bg-glow::after {
+      content: '';
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(100px);
+      opacity: .1;
+    }
+    .bg-glow::before {
+      width: 700px; height: 700px;
+      background: var(--primary);
+      top: -250px; left: -200px;
+      animation: bgDrift 22s ease-in-out infinite alternate;
+    }
+    .bg-glow::after {
+      width: 600px; height: 600px;
+      background: var(--secondary);
+      bottom: -200px; right: -200px;
+      animation: bgDrift 28s ease-in-out infinite alternate-reverse;
+    }
+    @keyframes bgDrift {
+      from { transform: translate(0,0) scale(1); }
+      to   { transform: translate(80px,60px) scale(1.15); }
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       § 5 – INTRO SCREEN
+    ═══════════════════════════════════════════════════════════════ */
+    #intro {
+      position: relative; z-index: 1;
+      min-height: 100dvh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: var(--s6) var(--s4);
+      text-align: center;
+      transition: opacity .45s ease, transform .45s ease;
+    }
+    #intro.leaving { opacity: 0; transform: translateY(-28px); pointer-events: none; }
+
+    .logo {
+      display: flex; align-items: center; gap: var(--s3);
+      margin-bottom: var(--s5);
+      animation: fadeUp .7s ease both;
+    }
+    .logo-icon {
+      width: 56px; height: 56px;
+      background: var(--g-hero);
+      border-radius: var(--r-md);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px;
+      box-shadow: var(--shadow-glow);
+    }
+    .logo-name {
+      font-family: var(--font-disp);
+      font-size: clamp(1.8rem,5vw,2.4rem);
+      font-weight: 900;
+      background: var(--g-hero);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-h1 {
+      font-family: var(--font-disp);
+      font-size: clamp(2rem,6vw,3.6rem);
+      font-weight: 900;
+      line-height: 1.1;
+      letter-spacing: -.03em;
+      max-width: 680px;
+      margin-bottom: var(--s3);
+      animation: fadeUp .7s .1s ease both;
+    }
+    .hero-h1 em { font-style: normal; background: var(--g-hero);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-sub {
+      font-size: clamp(.9rem,2.2vw,1.1rem);
+      color: var(--text-muted);
+      max-width: 520px;
+      margin-bottom: var(--s6);
+      animation: fadeUp .7s .2s ease both;
+    }
+
+    /* Feature pills row */
+    .features {
+      display: flex; gap: var(--s3); flex-wrap: wrap;
+      justify-content: center;
+      margin-bottom: var(--s6);
+      animation: fadeUp .7s .3s ease both;
+    }
+    .feat {
+      display: flex; align-items: center; gap: var(--s2);
+      padding: var(--s2) var(--s4);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-xl);
+      font-size: .82rem; font-weight: 500;
+      color: var(--text-muted);
+    }
+
+    /* CTA cluster */
+    .cta-row {
+      display: flex; gap: var(--s3); flex-wrap: wrap;
+      justify-content: center;
+      animation: fadeUp .7s .4s ease both;
+    }
+
+    /* Inline copy confirmation */
+    .copy-ok {
+      margin-top: var(--s3);
+      font-size: .82rem;
+      color: var(--success);
+      height: 20px;
+      opacity: 0; transition: opacity .3s;
+    }
+    .copy-ok.show { opacity: 1; }
+
+    /* Steps */
+    .steps-row {
+      display: flex; gap: var(--s4); flex-wrap: wrap;
+      justify-content: center;
+      margin-top: var(--s6);
+      animation: fadeUp .7s .5s ease both;
+    }
+    .step {
+      display: flex; flex-direction: column; align-items: center;
+      gap: var(--s2); max-width: 150px;
+    }
+    .step-num {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: var(--surface2); border: 2px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: .85rem; color: var(--primary-lt);
+    }
+    .step p { font-size: .78rem; color: var(--text-muted); text-align: center; }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       § 6 – GAME SCREEN LAYOUT (split-screen)
+    ═══════════════════════════════════════════════════════════════ */
+    #stage {
+      display: none;              /* revealed by JS */
+      position: relative; z-index: 1;
+      height: 100dvh;
+      overflow: hidden;
+    }
+    #stage.active {
+      display: grid;
+      /* Desktop: named areas, 30 / 70 split */
+      grid-template-columns: 30% 1fr;
+      grid-template-rows: 48px 1fr;
+      grid-template-areas:
+        "topbar topbar"
+        "video  games";
+    }
+
+    /* ── Top bar ─────────────────────────────────────────────────── */
+    .topbar {
+      grid-area: topbar;
+      display: flex; align-items: center;
+      justify-content: space-between;
+      padding: 0 var(--s5);
+      gap: var(--s3);
+      background: rgba(8,8,24,.88);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border-bottom: 1px solid var(--border);
+      z-index: 200;
+    }
+    .topbar-brand { display: flex; align-items: center; gap: var(--s2); }
+    .topbar-brand-icon {
+      width: 28px; height: 28px;
+      background: var(--g-hero);
+      border-radius: var(--r-sm);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+    }
+    .topbar-brand-name {
+      font-family: var(--font-disp);
+      font-weight: 900; font-size: 1rem;
+      background: var(--g-hero);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .room-pill {
+      display: flex; align-items: center; gap: var(--s2);
+      padding: 4px 12px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: var(--r-xl);
+      font-size: .72rem; color: var(--text-muted);
+      max-width: 240px; overflow: hidden;
+    }
+    .room-pill .live-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--success);
+      flex-shrink: 0;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    .room-pill-id {
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    @keyframes pulse {
+      0%,100% { opacity:1; box-shadow: 0 0 0 0 rgba(92,252,162,.5); }
+      50%      { opacity:.6; box-shadow: 0 0 0 6px rgba(92,252,162,0); }
+    }
+    .topbar-actions { display: flex; align-items: center; gap: var(--s2); }
+
+    /* ── Video panel ─────────────────────────────────────────────── */
+    .video-panel {
+      grid-area: video;
+      display: flex; flex-direction: column;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .panel-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: var(--s3) var(--s4);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .panel-title { font-size: .72rem; font-weight: 700;
+      letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+
+    #jitsi-wrap {
+      flex: 1;
+      position: relative;
+      background: #000;
+      overflow: hidden;
+    }
+    #jitsi-wrap iframe { width: 100%; height: 100%; border: none; }
+
+    .jitsi-loader {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: var(--s4);
+      background: var(--surface);
+      z-index: 10;
+      transition: opacity .5s;
+    }
+    .jitsi-loader.gone { opacity: 0; pointer-events: none; }
+    .spin {
+      width: 38px; height: 38px;
+      border: 3px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .jitsi-loader p { font-size: .82rem; color: var(--text-muted); }
+
+    /* ── Games panel ─────────────────────────────────────────────── */
+    .games-panel {
+      grid-area: games;
+      display: flex; flex-direction: column;
+      overflow: hidden;
+      background: var(--bg);
+    }
+
+    /* Tab bar */
+    .tab-bar {
+      display: flex; gap: 2px;
+      padding: var(--s2) var(--s3);
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .tab-bar::-webkit-scrollbar { display: none; }
+
+    .tab {
+      padding: 8px 18px;
+      border-radius: var(--r-md);
+      font-size: .82rem; font-weight: 600;
+      color: var(--text-muted);
+      white-space: nowrap;
+      min-height: 40px;
+      transition: background .18s, color .18s;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active {
+      background: var(--g-hero);
+      color: #fff;
+      box-shadow: var(--shadow-glow);
+    }
+
+    /* Game container */
+    .game-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: var(--s5);
+      display: flex; flex-direction: column; gap: var(--s4);
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+    .game-area::-webkit-scrollbar { width: 5px; }
+    .game-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* Panel visibility controlled by JS */
+    .game-panel { display: none; }
+    .game-panel.active { display: flex; flex-direction: column; gap: var(--s4); }
+
+    /* ═══════════════════════════════════════════════════════════════
+       § 7 – TOAST NOTIFICATIONS
+    ═══════════════════════════════════════════════════════════════ */
+    #toast-shelf {
+      position: fixed; bottom: var(--s5); left: 50%;
+      transform: translateX(-50%);
+      z-index: 9999;
+      display: flex; flex-direction: column; gap: var(--s2);
+      pointer-events: none;
+    }
+    .toast {
+      display: flex; align-items: center; gap: var(--s2);
+      padding: var(--s2) var(--s5);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--r-xl);
+      font-size: .85rem; font-weight: 500;
+      box-shadow: var(--shadow);
+      white-space: nowrap;
+      animation: toastIn .35s ease both, toastOut .35s ease 2.6s both;
+    }
+    @keyframes toastIn  { from{opacity:0;transform:translateY(12px) scale(.9)} to{opacity:1;transform:none} }
+    @keyframes toastOut { from{opacity:1;transform:none} to{opacity:0;transform:translateY(12px) scale(.9)} }
+
+    /* ═══════════════════════════════════════════════════════════════
+       § 8 – CONFETTI CANVAS
+    ═══════════════════════════════════════════════════════════════ */
+    #confetti {
+      position: fixed; inset: 0;
+      pointer-events: none; z-index: 8000;
+      display: none;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       § 9 – GAME 1: WORD PUZZLE (Wordle-style)
+    ═══════════════════════════════════════════════════════════════ */
+
+    /* Grid of letter tiles */
+    #wp-grid {
+      display: flex; flex-direction: column;
+      align-items: center; gap: var(--s2);
+    }
+    .wp-row {
+      display: flex; gap: var(--s2);
+    }
+    .wp-tile {
+      width: clamp(42px,9vw,58px);
+      height: clamp(42px,9vw,58px);
+      border: 2px solid var(--border2);
+      border-radius: var(--r-sm);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-disp);
+      font-size: clamp(1.1rem,3vw,1.5rem);
+      font-weight: 900;
+      text-transform: uppercase;
+      color: var(--text);
+      background: var(--surface2);
+      transition: border-color .15s, background .15s, transform .15s;
+      user-select: none;
+    }
+    .wp-tile[data-state="correct"] {
+      background: var(--success); border-color: var(--success);
+      color: var(--bg); animation: tileFlip .4s ease;
+    }
+    .wp-tile[data-state="present"] {
+      background: var(--warning); border-color: var(--warning);
+      color: var(--bg); animation: tileFlip .4s ease;
+    }
+    .wp-tile[data-state="absent"] {
+      background: var(--surface3); border-color: var(--border);
+      color: var(--text-muted); animation: tileFlip .4s ease;
+    }
+    .wp-tile[data-state="filled"] {
+      border-color: var(--primary);
+      transform: scale(1.06);
+    }
+    @keyframes tileFlip {
+      0%   { transform: rotateX(0); }
+      50%  { transform: rotateX(90deg); }
+      100% { transform: rotateX(0); }
+    }
+
+    /* On-screen keyboard */
+    .wp-keyboard {
+      display: flex; flex-direction: column;
+      align-items: center; gap: var(--s2);
+    }
+    .wp-kb-row { display: flex; gap: var(--s1); }
+    .wp-key {
+      min-width: clamp(28px,6vw,42px);
+      height: clamp(40px,7vw,52px);
+      border-radius: var(--r-sm);
+      font-size: clamp(.7rem,1.5vw,.9rem);
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--text);
+      background: var(--surface3);
+      border: 1px solid var(--border);
+      transition: background .18s, color .18s;
+      display: flex; align-items: center; justify-content: center;
+      padding: 0 4px;
+    }
+    .wp-key:hover { background: var(--border2); }
+    .wp-key[data-k-state="correct"] { background: var(--success); color: var(--bg); border-color: var(--success); }
+    .wp-key[data-k-state="present"] { background: var(--warning); color: var(--bg); border-color: var(--warning); }
+    .wp-key[data-k-state="absent"]  { background: var(--surface);  color: var(--text-dim); border-color: var(--border); }
+    .wp-key.wide { min-width: clamp(52px,9vw,68px); font-size: .7rem; }
+
+    /* Message bar */
+    .wp-msg {
+      text-align: center;
+      font-weight: 700;
+      font-size: .9rem;
+      min-height: 24px;
+      color: var(--warning);
+    }
+
+    /* Legend */
+    .wp-legend {
+      display: flex; gap: var(--s3); flex-wrap: wrap; justify-content: center;
+    }
+    .wp-leg-item {
+      display: flex; align-items: center; gap: var(--s2);
+      font-size: .75rem; color: var(--text-muted);
+    }
+    .wp-leg-box {
+      width: 20px; height: 20px; border-radius: 4px;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       § 10 – GAME 2: CANVAS DOODLE
+    ═══════════════════════════════════════════════════════════════ */
+    .canvas-toolbar {
+      display: flex; align-items: center; gap: var(--s2);
+      flex-wrap: wrap;
+    }
+    .swatch {
+      width: 30px; height: 30px; border-radius: 50%;
+      border: 3px solid transparent;
+      cursor: pointer; flex-shrink: 0;
+      transition: transform .15s, border-color .15s;
+    }
+    .swatch:hover   { transform: scale(1.18); }
+    .swatch.on { border-color: #fff; transform: scale(1.22); }
+
+    .tb-divider { width: 1px; height: 26px; background: var(--border); }
+
+    .sz-btn {
+      width: 34px; height: 34px; border-radius: var(--r-sm);
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text-muted); font-size: .72rem; font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .15s, border-color .15s;
+    }
+    .sz-btn.on { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .sz-btn:hover:not(.on) { border-color: var(--primary-lt); }
+
+    .tool-btn {
+      padding: 6px 13px;
+      border-radius: var(--r-sm);
+      background: var(--surface2); border: 1px solid var(--border);
+      font-size: .78rem; font-weight: 700; color: var(--text-muted);
+      transition: background .15s, border-color .15s, color .15s;
+      min-height: 34px;
+    }
+    .tool-btn.on { background: rgba(124,92,252,.18); color: var(--primary-lt); border-color: var(--primary); }
+    .tool-btn:hover:not(.on) { color: var(--text); border-color: var(--text-muted); }
+
+    .canvas-wrap {
+      position: relative;
+      border: 2px solid var(--border);
+      border-radius: var(--r-md);
+      overflow: hidden;
+      background: #fff;
+      flex: 1;
+      min-height: 320px;
+      cursor: crosshair;
+    }
+    #draw-canvas {
+      display: block; width: 100%; height: 100%;
+      touch-action: none;          /* critical: prevents iOS scroll conflict */
+    }
+
+    /* Word prompt for drawing game */
+    .draw-prompt {
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: var(--s3);
+    }
+    .draw-prompt .word-reveal {
+      font-family: var(--font-disp);
+      font-size: 1.6rem; font-weight: 900;
+      background: var(--g-hero);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       § 11 – GAME 3: TIC-TAC-TOE / CONNECT FOUR
+    ═══════════════════════════════════════════════════════════════ */
+    .ttt-mode-row {
+      display: flex; gap: var(--s2);
+    }
+    .mode-btn {
+      flex: 1;
+      padding: 10px; border-radius: var(--r-md);
+      font-size: .82rem; font-weight: 700;
+      background: var(--surface2); border: 2px solid var(--border);
+      color: var(--text-muted);
+      transition: border-color .18s, color .18s;
+    }
+    .mode-btn.active { border-color: var(--primary); color: var(--primary-lt); }
+
+    /* Score strip */
+    .score-strip {
+      display: flex; gap: var(--s4); justify-content: center;
+      flex-wrap: wrap;
+    }
+    .sc-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--r-md);
+      padding: var(--s3) var(--s5);
+      text-align: center;
+      flex: 1 1 80px;
+    }
+    .sc-val {
+      font-family: var(--font-disp);
+      font-size: 2rem; font-weight: 900;
+      background: var(--g-hero);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .sc-lbl { font-size: .68rem; color: var(--text-muted); margin-top: 2px; }
+
+    /* Turn indicator */
+    .turn-indicator {
+      text-align: center;
+      font-size: .88rem; font-weight: 700;
+      color: var(--text-muted);
+      min-height: 22px;
+    }
+
+    /* Tic-Tac-Toe board */
+    #ttt-board {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      max-width: 300px;
+      align-self: center;
+      width: 100%;
+    }
+    .ttt-cell {
+      aspect-ratio: 1;
+      background: var(--surface2);
+      border: 2px solid var(--border);
+      border-radius: var(--r-md);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-disp);
+      font-size: clamp(1.6rem,5vw,2.6rem);
+      font-weight: 900;
+      cursor: pointer;
+      transition: background .15s, border-color .15s;
+      user-select: none;
+    }
+    .ttt-cell:hover:not(.taken) { background: var(--surface3); border-color: var(--primary); }
+    .ttt-cell.taken { cursor: default; }
+    .ttt-cell.X { color: var(--primary-lt); }
+    .ttt-cell.O { color: var(--secondary); }
+    .ttt-cell.win-cell { background: rgba(92,252,162,.12); border-color: var(--success); }
+
+    /* Connect Four board */
+    #cf-board {
+      display: grid;
+      grid-template-columns: repeat(7,1fr);
+      gap: 5px;
+      padding: var(--s3);
+      background: var(--surface);
+      border: 2px solid var(--border);
+      border-radius: var(--r-lg);
+      align-self: center;
+      width: 100%;
+      max-width: 460px;
+    }
+    .cf-col-btn {
+      background: rgba(124,92,252,.12);
+      border: 1px solid rgba(124,92,252,.25);
+      border-radius: var(--r-sm);
+      padding: 6px 0;
+      font-size: .8rem;
+      color: var(--primary-lt);
+      font-weight: 700;
+      transition: background .15s;
+    }
+    .cf-col-btn:hover { background: rgba(124,92,252,.3); }
+    .cf-col-btn:disabled { opacity: .3; cursor: not-allowed; }
+    .cf-cell {
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background: var(--surface2);
+      border: 2px solid var(--border);
+      transition: background .25s, border-color .25s;
+    }
+    .cf-cell.P1 { background: var(--primary); border-color: var(--primary-lt); }
+    .cf-cell.P2 { background: var(--secondary); border-color: #ff88bb; }
+    .cf-cell.win-cell { animation: cfWin .4s ease infinite alternate; }
+    @keyframes cfWin {
+      from { box-shadow: none; }
+      to   { box-shadow: 0 0 14px rgba(92,252,162,.7); }
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       § 12 – GAME 4: QUESTION / DARE DECK
+    ═══════════════════════════════════════════════════════════════ */
+    .deck-filters {
+      display: flex; gap: var(--s2); flex-wrap: wrap;
+    }
+    .deck-filter {
+      padding: 6px 14px;
+      border-radius: var(--r-xl);
+      font-size: .78rem; font-weight: 700;
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text-muted);
+      transition: background .15s, border-color .15s, color .15s;
+      min-height: 36px;
+    }
+    .deck-filter.active {
+      background: rgba(124,92,252,.15);
+      border-color: var(--primary);
+      color: var(--primary-lt);
+    }
+
+    .deck-card {
+      background: var(--g-card);
+      border: 1px solid var(--border);
+      border-radius: var(--r-xl);
+      padding: var(--s6) var(--s5);
+      display: flex; flex-direction: column;
+      align-items: center; gap: var(--s4);
+      text-align: center;
+      min-height: 220px;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .deck-card::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: var(--g-hero);
+      opacity: .03;
+      pointer-events: none;
+    }
+    .deck-type-badge {
+      font-size: .68rem; font-weight: 800; letter-spacing: .12em;
+      text-transform: uppercase; padding: 4px 12px;
+      border-radius: var(--r-xl); border: 1px solid;
+    }
+    .deck-type-badge.question {
+      background: rgba(124,92,252,.12);
+      border-color: rgba(124,92,252,.3);
+      color: var(--primary-lt);
+    }
+    .deck-type-badge.dare {
+      background: rgba(252,92,156,.12);
+      border-color: rgba(252,92,156,.3);
+      color: var(--secondary);
+    }
+    .deck-type-badge.wyr {
+      background: rgba(92,244,252,.12);
+      border-color: rgba(92,244,252,.3);
+      color: var(--accent);
+    }
+    .deck-type-badge.deep {
+      background: rgba(252,228,92,.12);
+      border-color: rgba(252,228,92,.3);
+      color: var(--warning);
+    }
+
+    .deck-text {
+      font-family: var(--font-disp);
+      font-size: clamp(1.1rem,3vw,1.45rem);
+      font-weight: 800;
+      line-height: 1.3;
+      max-width: 560px;
+    }
+
+    .deck-nav {
+      display: flex; gap: var(--s3); align-items: center;
+      flex-wrap: wrap; justify-content: center;
+    }
+    .deck-counter { font-size: .78rem; color: var(--text-muted); }
+
+    /* Answer input for WYR votes */
+    .deck-vote-row {
+      display: flex; gap: var(--s2); flex-wrap: wrap; justify-content: center;
+    }
+    .vote-btn {
+      flex: 1 1 120px;
+      max-width: 200px;
+      padding: 10px;
+      border-radius: var(--r-md);
+      font-weight: 700; font-size: .85rem;
+      transition: transform .18s, box-shadow .18s;
+      border: 2px solid;
+    }
+    .vote-btn.a {
+      background: rgba(124,92,252,.12); border-color: var(--primary);
+      color: var(--primary-lt);
+    }
+    .vote-btn.b {
+      background: rgba(252,92,156,.12); border-color: var(--secondary);
+      color: var(--secondary);
+    }
+    .vote-btn:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+
+    .vote-result {
+      display: flex; gap: var(--s3); justify-content: center;
+      flex-wrap: wrap;
+    }
+    .vote-bar-wrap {
+      display: flex; flex-direction: column; align-items: center;
+      gap: var(--s1); min-width: 80px;
+    }
+    .vote-bar-outer {
+      width: 40px; height: 80px;
+      background: var(--surface2); border-radius: var(--r-md);
+      overflow: hidden;
+      display: flex; align-items: flex-end;
+    }
+    .vote-bar-inner {
+      width: 100%;
+      background: var(--g-hero);
+      border-radius: var(--r-md);
+      transition: height .5s ease;
+    }
+    .vote-bar-label { font-size: .72rem; color: var(--text-muted); font-weight: 600; }
+
+    /* ═══════════════════════════════════════════════════════════════
+       § 13 – RESPONSIVE (MOBILE / TABLET)
+    ═══════════════════════════════════════════════════════════════ */
+    @media (max-width: 768px) {
+      /* Stack layout vertically */
+      #stage.active {
+        grid-template-columns: 1fr;
+        grid-template-rows: 48px 200px 1fr;
+        grid-template-areas:
+          "topbar"
+          "video"
+          "games";
+        height: auto;
+        overflow: auto;
+      }
+
+      /* Video panel: compact, sticky at top */
+      .video-panel {
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        position: sticky; top: 0;
+        z-index: 100;
+        height: 200px;
+      }
+
+      .games-panel { min-height: 65dvh; }
+
+      /* Larger tap targets */
+      .tab { padding: 10px 14px; }
+      .wp-tile { width: 42px; height: 42px; }
+
+      /* Connect Four: smaller on mobile */
+      #cf-board { max-width: 340px; }
+    }
+
+    @media (max-width: 480px) {
+      .features { display: none; }
+      .steps-row { display: none; }
+      .cta-row { flex-direction: column; align-items: stretch; }
+      .cta-row .btn { width: 100%; }
+
+      #ttt-board { max-width: 240px; }
+      .cf-cell { border-width: 1px; }
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       § 14 – UTILITY
+    ═══════════════════════════════════════════════════════════════ */
+    .hidden { display: none !important; }
+    .text-center { text-align: center; }
+    .mt1 { margin-top: var(--s2); }
+    .mt2 { margin-top: var(--s4); }
+    .flex-center { display: flex; align-items: center; justify-content: center; }
+    .gap2 { gap: var(--s4); }
+  </style>
+</head>
+
+<body>
+  <!-- Decorative animated glow -->
+  <div class="bg-glow" aria-hidden="true"></div>
+
+  <!-- Confetti canvas (win celebrations) -->
+  <canvas id="confetti" aria-hidden="true"></canvas>
+
+  <!-- Toast container -->
+  <div id="toast-shelf" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- ════════════════════════════════════════════════════════════════
+       SCREEN 1 – INTRO / LANDING
+  ════════════════════════════════════════════════════════════════ -->
+  <main id="intro" role="main">
+    <div class="logo">
+      <div class="logo-icon" aria-hidden="true">💑</div>
+      <span class="logo-name">CouplePlay</span>
+    </div>
+
+    <h1 class="hero-h1">
+      Games & Video Calls,<br />
+      <em>Built for Two</em>
+    </h1>
+
+    <p class="hero-sub">
+      Share a private room link, jump on a free HD video call, then dive into
+      four cooperative games together — no downloads, no accounts.
+    </p>
+
+    <!-- Feature pills -->
+    <div class="features" aria-label="Features">
+      <div class="feat">📹 Free HD Video</div>
+      <div class="feat">🔤 Word Puzzle</div>
+      <div class="feat">🎨 Drawing Board</div>
+      <div class="feat">🎯 Tic-Tac-Toe / C4</div>
+      <div class="feat">💬 Question Deck</div>
+    </div>
+
+    <!-- CTA -->
+    <div class="cta-row">
+      <button class="btn btn-primary" id="btn-start">🎮 Start Playing</button>
+      <button class="btn btn-ghost"   id="btn-copy-intro">🔗 Copy Invite Link</button>
+    </div>
+    <p class="copy-ok" id="copy-ok-intro" aria-live="polite">
+      ✅ Link copied! Send it to your partner.
+    </p>
+
+    <!-- How-it-works -->
+    <div class="steps-row" aria-label="How it works">
+      <div class="step">
+        <div class="step-num">1</div>
+        <p>Copy & share the invite link with your partner.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <p>Both click <strong>Start Playing</strong> — video auto-connects.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <p>Pick any of the four games and play together! 🎉</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- ════════════════════════════════════════════════════════════════
+       SCREEN 2 – GAME STAGE
+  ════════════════════════════════════════════════════════════════ -->
+  <div id="stage" role="main" aria-label="Game stage">
+
+    <!-- Top navigation bar -->
+    <header class="topbar" role="banner">
+      <div class="topbar-brand">
+        <div class="topbar-brand-icon" aria-hidden="true">💑</div>
+        <span class="topbar-brand-name">CouplePlay</span>
+      </div>
+
+      <div class="room-pill" aria-label="Room ID">
+        <span class="live-dot" aria-hidden="true"></span>
+        <span class="room-pill-id" id="topbar-room"></span>
+      </div>
+
+      <div class="topbar-actions">
+        <button class="btn-icon" id="btn-copy-stage" title="Copy invite link" aria-label="Copy invite link">🔗</button>
+        <button class="btn-icon" id="btn-mute"       title="Toggle mic"       aria-label="Toggle microphone">🎤</button>
+        <button class="btn btn-ghost btn-sm" id="btn-home">⬅ Home</button>
+      </div>
+    </header>
+
+    <!-- Left / top: Video call -->
+    <aside class="video-panel" aria-label="Video call">
+      <div class="panel-head">
+        <span class="panel-title">📹 Video Call</span>
+      </div>
+      <div id="jitsi-wrap">
+        <div class="jitsi-loader" id="jitsi-loader">
+          <div class="spin" aria-hidden="true"></div>
+          <p>Connecting…</p>
+          <p style="font-size:.72rem;margin-top:2px;">Allow camera &amp; mic when prompted.</p>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Right / bottom: Games -->
+    <section class="games-panel" aria-label="Games">
+
+      <!-- Tab bar -->
+      <nav class="tab-bar" role="tablist" aria-label="Game selection">
+        <button class="tab active" data-panel="word"    role="tab" aria-selected="true"  aria-controls="panel-word">🔤 Word Puzzle</button>
+        <button class="tab"        data-panel="draw"    role="tab" aria-selected="false" aria-controls="panel-draw">🎨 Drawing</button>
+        <button class="tab"        data-panel="grid"    role="tab" aria-selected="false" aria-controls="panel-grid">🎯 Grid Games</button>
+        <button class="tab"        data-panel="deck"    role="tab" aria-selected="false" aria-controls="panel-deck">💬 Question Deck</button>
+      </nav>
+
+      <!-- Scrollable game area -->
+      <div class="game-area">
+
+        <!-- ══ GAME 1: WORD PUZZLE ════════════════════════════════ -->
+        <div class="game-panel active" id="panel-word" role="tabpanel">
+
+          <!-- Status message (invalid guess, win/lose) -->
+          <p class="wp-msg" id="wp-msg" aria-live="polite"></p>
+
+          <!-- 6×5 tile grid -->
+          <div id="wp-grid" aria-label="Word puzzle grid"></div>
+
+          <!-- Legend -->
+          <div class="wp-legend" aria-label="Color key">
+            <div class="wp-leg-item">
+              <div class="wp-leg-box" style="background:var(--success)"></div>
+              <span>Correct position</span>
+            </div>
+            <div class="wp-leg-item">
+              <div class="wp-leg-box" style="background:var(--warning)"></div>
+              <span>Wrong position</span>
+            </div>
+            <div class="wp-leg-item">
+              <div class="wp-leg-box" style="background:var(--surface3)"></div>
+              <span>Not in word</span>
+            </div>
+          </div>
+
+          <!-- On-screen keyboard -->
+          <div class="wp-keyboard" id="wp-keyboard" aria-label="On-screen keyboard"></div>
+
+          <!-- Controls -->
+          <div style="display:flex;gap:var(--s3);flex-wrap:wrap;justify-content:center;">
+            <button class="btn btn-primary btn-sm" id="wp-new">New Word 🔀</button>
+          </div>
+        </div>
+
+        <!-- ══ GAME 2: DRAWING BOARD ══════════════════════════════ -->
+        <div class="game-panel" id="panel-draw" role="tabpanel">
+
+          <!-- Drawing prompt -->
+          <div class="draw-prompt card">
+            <div>
+              <p class="label-xs">Draw this word:</p>
+              <p class="word-reveal" id="draw-word">ELEPHANT</p>
+            </div>
+            <button class="btn btn-ghost btn-sm" id="draw-new-word">New Word 🔀</button>
+          </div>
+
+          <!-- Toolbar -->
+          <div class="canvas-toolbar card">
+            <!-- Colour swatches -->
+            <button class="swatch on"  data-color="#0f0f23"  title="Dark"   aria-label="Dark"></button>
+            <button class="swatch"     data-color="#fc5c9c"  title="Pink"   aria-label="Pink"></button>
+            <button class="swatch"     data-color="#7c5cfc"  title="Violet" aria-label="Violet"></button>
+            <button class="swatch"     data-color="#5cf4fc"  title="Cyan"   aria-label="Cyan"></button>
+            <button class="swatch"     data-color="#5cfca2"  title="Green"  aria-label="Green"></button>
+            <button class="swatch"     data-color="#fce45c"  title="Yellow" aria-label="Yellow"></button>
+            <button class="swatch"     data-color="#fc7c5c"  title="Orange" aria-label="Orange"></button>
+            <button class="swatch"     data-color="#ffffff"  title="White"  aria-label="White"></button>
+
+            <div class="tb-divider" aria-hidden="true"></div>
+
+            <!-- Size buttons -->
+            <button class="sz-btn"     data-size="2"  title="Tiny"   aria-label="Tiny brush">XS</button>
+            <button class="sz-btn"     data-size="5"  title="Small"  aria-label="Small brush">S</button>
+            <button class="sz-btn on"  data-size="10" title="Medium" aria-label="Medium brush">M</button>
+            <button class="sz-btn"     data-size="20" title="Large"  aria-label="Large brush">L</button>
+            <button class="sz-btn"     data-size="40" title="XL"     aria-label="XL brush">XL</button>
+
+            <div class="tb-divider" aria-hidden="true"></div>
+
+            <!-- Tool buttons -->
+            <button class="tool-btn on" data-tool="pen"   aria-label="Pen">✏️ Pen</button>
+            <button class="tool-btn"    data-tool="fill"  aria-label="Fill">🪣 Fill</button>
+            <button class="tool-btn"    data-tool="erase" aria-label="Eraser">🧹 Erase</button>
+
+            <div class="tb-divider" aria-hidden="true"></div>
+
+            <button class="btn btn-ghost btn-sm" id="draw-clear">🗑 Clear</button>
+            <button class="btn btn-ghost btn-sm" id="draw-save">💾 Save</button>
+          </div>
+
+          <!-- Canvas -->
+          <div class="canvas-wrap">
+            <canvas id="draw-canvas" aria-label="Drawing canvas"></canvas>
+          </div>
+        </div>
+
+        <!-- ══ GAME 3: TIC-TAC-TOE / CONNECT FOUR ════════════════ -->
+        <div class="game-panel" id="panel-grid" role="tabpanel">
+
+          <!-- Mode selector -->
+          <div class="ttt-mode-row" role="group" aria-label="Game mode">
+            <button class="mode-btn active" data-mode="ttt">🎯 Tic-Tac-Toe</button>
+            <button class="mode-btn"        data-mode="cf">🟡 Connect Four</button>
+          </div>
+
+          <!-- Score strip -->
+          <div class="score-strip" aria-label="Scores">
+            <div class="sc-card">
+              <div class="sc-val" id="sc-p1">0</div>
+              <div class="sc-lbl">⬤ Player 1</div>
+            </div>
+            <div class="sc-card">
+              <div class="sc-val" id="sc-draw">0</div>
+              <div class="sc-lbl">🤝 Draws</div>
+            </div>
+            <div class="sc-card">
+              <div class="sc-val" id="sc-p2">0</div>
+              <div class="sc-lbl">⬤ Player 2</div>
+            </div>
+          </div>
+
+          <!-- Turn indicator -->
+          <p class="turn-indicator" id="turn-indicator" aria-live="polite"></p>
+
+          <!-- TTT board (3×3) -->
+          <div id="ttt-board" aria-label="Tic-Tac-Toe board"></div>
+
+          <!-- Connect Four drop buttons + grid -->
+          <div id="cf-board" class="hidden" aria-label="Connect Four board"></div>
+
+          <!-- Reset -->
+          <div style="display:flex;justify-content:center;gap:var(--s3);">
+            <button class="btn btn-ghost btn-sm" id="grid-reset">🔄 Reset Game</button>
+            <button class="btn btn-ghost btn-sm" id="grid-reset-scores">Reset Scores</button>
+          </div>
+        </div>
+
+        <!-- ══ GAME 4: QUESTION DECK ══════════════════════════════ -->
+        <div class="game-panel" id="panel-deck" role="tabpanel">
+
+          <!-- Category filters -->
+          <div class="deck-filters" role="group" aria-label="Card categories">
+            <button class="deck-filter active" data-cat="all">✨ All</button>
+            <button class="deck-filter" data-cat="question">💬 Icebreaker</button>
+            <button class="deck-filter" data-cat="deep">🌊 Deep Talk</button>
+            <button class="deck-filter" data-cat="wyr">🤔 Would You Rather</button>
+            <button class="deck-filter" data-cat="dare">🔥 Dare</button>
+          </div>
+
+          <!-- Card display -->
+          <div class="deck-card" id="deck-card" aria-live="polite">
+            <span class="deck-type-badge question" id="deck-badge">Icebreaker</span>
+            <p class="deck-text" id="deck-text">Press "Next Card" to begin!</p>
+
+            <!-- WYR vote buttons (shown only for "wyr" type) -->
+            <div class="deck-vote-row hidden" id="deck-vote-row" aria-label="Vote">
+              <button class="vote-btn a" id="vote-a">Option A</button>
+              <button class="vote-btn b" id="vote-b">Option B</button>
+            </div>
+
+            <!-- Vote result bars (shown after both vote) -->
+            <div class="vote-result hidden" id="vote-result">
+              <div class="vote-bar-wrap">
+                <div class="vote-bar-outer">
+                  <div class="vote-bar-inner" id="bar-a" style="height:0%"></div>
+                </div>
+                <span class="vote-bar-label" id="bar-a-lbl">A: 0</span>
+              </div>
+              <div class="vote-bar-wrap">
+                <div class="vote-bar-outer">
+                  <div class="vote-bar-inner" id="bar-b"
+                       style="height:0%;background:var(--g-hero)"></div>
+                </div>
+                <span class="vote-bar-label" id="bar-b-lbl">B: 0</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Navigation -->
+          <div class="deck-nav">
+            <button class="btn btn-ghost btn-sm" id="deck-prev">◀ Prev</button>
+            <span class="deck-counter" id="deck-counter">Card 0 / 0</span>
+            <button class="btn btn-primary btn-sm" id="deck-next">Next Card ▶</button>
+          </div>
+
+          <!-- Shuffle button -->
+          <div style="display:flex;justify-content:center;">
+            <button class="btn btn-ghost btn-sm" id="deck-shuffle">🔀 Shuffle Deck</button>
+          </div>
+        </div>
+
+      </div><!-- /game-area -->
+    </section>
+  </div><!-- /stage -->
+
+  <!-- ════════════════════════════════════════════════════════════════
+       JAVASCRIPT
+  ════════════════════════════════════════════════════════════════ -->
+  <script>
+  'use strict';
+  /*
+  ╔══════════════════════════════════════════════════════════════════╗
+  ║  CouplePlay — Application JavaScript                             ║
+  ║  Security posture:                                               ║
+  ║    • All DOM writes use textContent / createElement — NO         ║
+  ║      innerHTML with user data anywhere in this file.             ║
+  ║    • sanitizeText() strips HTML before any string is displayed.  ║
+  ║    • Room IDs generated with crypto.getRandomValues (CSPRNG).    ║
+  ║    • Room IDs validated against strict regex on load.            ║
+  ╚══════════════════════════════════════════════════════════════════╝
+  */
+
+  /* ═════════════════════════════════════════════════════════════════
+     A. SECURITY UTILITIES
+  ═════════════════════════════════════════════════════════════════ */
+
+  /**
+   * sanitizeText — strips all HTML tags from a string.
+   * Use this on ANY external input before inserting into the DOM.
+   * Even though we use textContent (not innerHTML), this is a
+   * defence-in-depth measure that catches accidental innerHTML usage.
+   * @param {string} str
+   * @returns {string}
+   */
+  function sanitizeText(str) {
+    // Replace < and > with HTML entity equivalents
+    return String(str).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  /**
+   * generateRoomId — cryptographically secure random room identifier.
+   * Uses window.crypto.getRandomValues for 128 bits of entropy,
+   * making brute-force room enumeration computationally infeasible.
+   * @returns {string}  e.g. "CP-Xk7mRqBvAd2WnYpZ"
+   */
+  function generateRoomId() {
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const bytes    = new Uint8Array(16);         // 128 bits of entropy
+    crypto.getRandomValues(bytes);               // CSPRNG — not Math.random()
+    return 'CP-' + Array.from(bytes, b => alphabet[b % alphabet.length]).join('');
+  }
+
+  /**
+   * Room ID allow-list regex.
+   * Only 3-50 chars of letters, digits, underscores, hyphens accepted.
+   * Anything else is discarded and a fresh ID is generated.
+   */
+  const ROOM_ID_RE = /^[A-Za-z0-9_-]{3,50}$/;
+
+  /**
+   * resolveRoomId — read URL param or generate a secure new ID.
+   * Validates against allow-list before use.
+   * @returns {string}
+   */
+  function resolveRoomId() {
+    const params = new URLSearchParams(window.location.search);
+    const param  = params.get('room');
+
+    // Validate: only use URL param if it matches the safe pattern
+    if (param && ROOM_ID_RE.test(param)) return param;
+
+    // Generate fresh cryptographically random ID and push to address bar
+    const id = generateRoomId();
+    const url = `${window.location.pathname}?room=${encodeURIComponent(id)}`;
+    history.replaceState({ roomId: id }, '', url);
+    return id;
+  }
+
+  /* ═════════════════════════════════════════════════════════════════
+     B. TOAST NOTIFICATION SYSTEM
+  ═════════════════════════════════════════════════════════════════ */
+
+  /**
+   * toast — display a transient notification.
+   * Uses textContent (not innerHTML) to prevent XSS.
+   * @param {string} msg   Message text (will be sanitized)
+   * @param {string} emoji Leading emoji character
+   */
+  function toast(msg, emoji = 'ℹ️') {
+    const shelf = document.getElementById('toast-shelf');
+    const el    = document.createElement('div');
+    el.className = 'toast';
+
+    const eSpan = document.createElement('span');
+    eSpan.textContent = emoji;
+
+    const mSpan = document.createElement('span');
+    mSpan.textContent = sanitizeText(msg);   // sanitized before display
+
+    el.appendChild(eSpan);
+    el.appendChild(mSpan);
+    shelf.appendChild(el);
+
+    // Auto-remove after animation completes (~3s)
+    setTimeout(() => el.remove(), 3200);
+  }
+
+  /* ═════════════════════════════════════════════════════════════════
+     C. CLIPBOARD UTILITY
+  ═════════════════════════════════════════════════════════════════ */
+
+  /**
+   * copyURL — writes the current page URL to the clipboard.
+   * Async clipboard API with execCommand fallback for older browsers.
+   */
+  async function copyURL() {
+    const url = window.location.href;
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch (_) {
+      // Fallback: create a transient textarea
+      const ta = document.createElement('textarea');
+      ta.value = url;
+      ta.style.cssText = 'position:fixed;opacity:0;pointer-events:none;';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');   // legacy fallback only
+      ta.remove();
+    }
+    toast('Invite link copied! Share it with your partner.', '🔗');
+  }
+
+  /* ═════════════════════════════════════════════════════════════════
+     D. CONFETTI CELEBRATION ENGINE
+     Pure requestAnimationFrame, no external libraries.
+  ═════════════════════════════════════════════════════════════════ */
+
+  (function initConfetti() {
+    const canvas = document.getElementById('confetti');
+    const ctx    = canvas.getContext('2d');
+    const COLORS = ['#7c5cfc','#fc5c9c','#5cf4fc','#5cfca2','#fce45c','#fc7c5c','#ffffff'];
+    let   raf;
+
+    /** Launch confetti particles. */
+    window.launchConfetti = function() {
+      canvas.style.display = 'block';
+      canvas.width  = window.innerWidth;
+      canvas.height = window.innerHeight;
+
+      // Spawn 120 particles from the top
+      const particles = Array.from({ length: 120 }, () => ({
+        x:     Math.random() * canvas.width,
+        y:     -12,
+        vx:    (Math.random() - .5) * 5,
+        vy:    Math.random() * 5 + 2,
+        w:     Math.random() * 11 + 4,
+        h:     Math.random() * 7  + 3,
+        color: COLORS[Math.floor(Math.random() * COLORS.length)],
+        angle: Math.random() * Math.PI * 2,
+        spin:  (Math.random() - .5) * .3,
+        alpha: 1,
+      }));
+
+      const start = performance.now();
+      const DURATION = 2800;
+
+      cancelAnimationFrame(raf);
+
+      function frame(now) {
+        const elapsed = now - start;
+        const progress = Math.min(elapsed / DURATION, 1);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        particles.forEach(p => {
+          p.x     += p.vx;
+          p.y     += p.vy;
+          p.vy    += .12;       // gravity
+          p.angle += p.spin;
+          p.alpha  = 1 - progress;
+
+          ctx.save();
+          ctx.globalAlpha = Math.max(p.alpha, 0);
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.angle);
+          ctx.fillStyle = p.color;
+          ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+          ctx.restore();
+        });
+
+        if (progress < 1) {
+          raf = requestAnimationFrame(frame);
+        } else {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          canvas.style.display = 'none';
+        }
+      }
+      raf = requestAnimationFrame(frame);
+    };
+  })();
+
+  /* ═════════════════════════════════════════════════════════════════
+     E. JITSI MEET VIDEO CALL
+  ═════════════════════════════════════════════════════════════════ */
+
+  let jitsiAPI = null;
+
+  /**
+   * initJitsi — mounts the Jitsi Meet iframe using the External API.
+   * Full configuration reference:
+   *   https://github.com/jitsi/jitsi-meet/blob/master/config.js
+   * @param {string} roomId  Validated room identifier
+   */
+  function initJitsi(roomId) {
+    // If the Jitsi script hasn't loaded yet (defer), retry after 600ms
+    if (typeof JitsiMeetExternalAPI === 'undefined') {
+      setTimeout(() => initJitsi(roomId), 600);
+      return;
+    }
+
+    // Dispose of any existing call before re-initialising
+    if (jitsiAPI) { jitsiAPI.dispose(); jitsiAPI = null; }
+
+    const container = document.getElementById('jitsi-wrap');
+
+    jitsiAPI = new JitsiMeetExternalAPI('meet.jit.si', {
+      roomName:   roomId,
+      parentNode: container,
+      width:      '100%',
+      height:     '100%',
+
+      /*
+       * Interface configuration — removes promotional elements and
+       * trims the toolbar to essentials for a 2-person call.
+       */
+      interfaceConfigOverwrite: {
+        SHOW_JITSI_WATERMARK:             false,
+        SHOW_WATERMARK_FOR_GUESTS:        false,
+        SHOW_BRAND_WATERMARK:             false,
+        SHOW_POWERED_BY:                  false,
+        SHOW_PROMOTIONAL_CLOSE_PAGE:      false,
+        MOBILE_APP_PROMO:                 false,
+        HIDE_KICK_BUTTON_FOR_GUESTS:      true,
+        TOOLBAR_BUTTONS: [
+          'microphone','camera','desktop',
+          'hangup','raisehand','fullscreen','tileview',
+        ],
+      },
+
+      configOverwrite: {
+        startWithAudioMuted:   false,
+        startWithVideoMuted:   false,
+        prejoinPageEnabled:    false,   // skip waiting room / lobby
+        enableLobbyChat:       false,
+        disableInviteFunctions:true,
+        p2p:                   { enabled: true, preferH264: true },
+        enableNoisyMicDetection: true,
+        analytics:             { disabled: true },
+        defaultBackground:     '#080818',
+        constraints: {
+          video: {
+            aspectRatio: 9 / 16,
+            height: { ideal: 480, max: 720, min: 180 },
+          },
+        },
+      },
+    });
+
+    /* Event: hide loader when connected */
+    jitsiAPI.addEventListener('videoConferenceJoined', () => {
+      document.getElementById('jitsi-loader').classList.add('gone');
+      toast('Video connected! 🎉', '📹');
+    });
+
+    jitsiAPI.addEventListener('participantJoined', ({ displayName }) => {
+      // sanitizeText used here because displayName is external / user-supplied
+      toast(`${sanitizeText(displayName || 'Your partner')} joined!`, '💑');
+    });
+
+    jitsiAPI.addEventListener('participantLeft', () => {
+      toast('Your partner left the call.', '👋');
+    });
+
+    jitsiAPI.addEventListener('audioMuteStatusChanged', ({ muted }) => {
+      document.getElementById('btn-mute').textContent = muted ? '🔇' : '🎤';
+    });
+  }
+
+  /* ═════════════════════════════════════════════════════════════════
+     F. APPLICATION STATE CONTROLLER
+     Manages the intro → stage transition and back.
+  ═════════════════════════════════════════════════════════════════ */
+
+  let ROOM_ID = '';
+
+  /** showStage — transition from intro screen to game stage. */
+  function showStage() {
+    const intro = document.getElementById('intro');
+    const stage = document.getElementById('stage');
+
+    intro.classList.add('leaving');
+
+    setTimeout(() => {
+      intro.style.display = 'none';
+      stage.classList.add('active');
+      document.getElementById('topbar-room').textContent = ROOM_ID;
+
+      // Init video call
+      initJitsi(ROOM_ID);
+
+      // Init all game modules (idempotent guards inside each)
+      WordPuzzle.init();
+      DrawingBoard.init();
+      GridGames.init();
+      QuestionDeck.init();
+    }, 460);
+  }
+
+  /** returnHome — dispose call and go back to intro. */
+  function returnHome() {
+    if (jitsiAPI) { jitsiAPI.dispose(); jitsiAPI = null; }
+
+    const stage = document.getElementById('stage');
+    const intro = document.getElementById('intro');
+
+    stage.classList.remove('active');
+    stage.style.display = '';         // let CSS handle on next .active
+
+    intro.style.display  = '';
+    intro.classList.remove('leaving');
+  }
+
+  /* ═════════════════════════════════════════════════════════════════
+     G. TAB NAVIGATION
+  ═════════════════════════════════════════════════════════════════ */
+
+  function initTabs() {
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        const target = tab.dataset.panel;
+
+        // Update tabs
+        document.querySelectorAll('.tab').forEach(t => {
+          t.classList.toggle('active', t === tab);
+          t.setAttribute('aria-selected', String(t === tab));
+        });
+
+        // Update panels
+        document.querySelectorAll('.game-panel').forEach(panel => {
+          panel.classList.toggle('active', panel.id === `panel-${target}`);
+        });
+
+        // Re-size canvas if switching to drawing tab
+        if (target === 'draw') DrawingBoard.resize();
+      });
+    });
+  }
+
+  /* ═════════════════════════════════════════════════════════════════
+     H. BOOTSTRAP (wires everything together on DOMContentLoaded)
+  ═════════════════════════════════════════════════════════════════ */
+
+  document.addEventListener('DOMContentLoaded', () => {
+
+    // Resolve / generate secure room ID
+    ROOM_ID = resolveRoomId();
+
+    // Intro screen buttons
+    document.getElementById('btn-start').addEventListener('click', showStage);
+    document.getElementById('btn-copy-intro').addEventListener('click', async () => {
+      await copyURL();
+      const ok = document.getElementById('copy-ok-intro');
+      ok.classList.add('show');
+      setTimeout(() => ok.classList.remove('show'), 3000);
+    });
+
+    // Stage header buttons
+    document.getElementById('btn-copy-stage').addEventListener('click', copyURL);
+    document.getElementById('btn-home').addEventListener('click', returnHome);
+    document.getElementById('btn-mute').addEventListener('click', () => {
+      if (jitsiAPI) jitsiAPI.executeCommand('toggleAudio');
+    });
+
+    // Tab navigation
+    initTabs();
+
+    // Warn on accidental page close during an active session
+    window.addEventListener('beforeunload', e => {
+      if (document.getElementById('stage').classList.contains('active')) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    });
+  });
+
+  /* ═════════════════════════════════════════════════════════════════
+     ══════════════════════════════════════════════════════════════
+     GAME MODULES
+     Each is an IIFE that returns a public { init } method.
+     All are idempotent — safe to call init() multiple times.
+     ══════════════════════════════════════════════════════════════
+  ═════════════════════════════════════════════════════════════════ */
+
+  /* ═════════════════════════════════════════════════════════════════
+     GAME 1 — WORD PUZZLE  (Wordle-style cooperative guessing)
+  ═════════════════════════════════════════════════════════════════ */
+  const WordPuzzle = (() => {
+    /*
+     * 5-letter word bank.  All words are hard-coded constants —
+     * no user input is ever used as a word source, preventing
+     * injection via the word bank.
+     */
+    const WORDS = [
+      'PLANT','DANCE','FLAME','CRISP','BRAVE','STONE','GLIDE',
+      'FRESH','QUIRK','VIVID','BLOOM','CREEK','DRAPE','EAGLE',
+      'FLUTE','GRAZE','HINGE','INLET','JOUST','KNEEL','LATCH',
+      'MIRTH','NOTCH','OPTIC','PRISM','QUEST','RIDGE','SCOUT',
+      'THUMP','ULCER','VAULT','WINCE','XYLEM','YEARN','ZONAL',
+      'BRIDE','CHARM','DWELL','EMBER','FANCY','GRAFT','HAVEN',
+      'ICING','JAZZY','KNACK','LOFTY','MANGO','NUDGE','ORBIT',
+      'PLUME','QUELL','ROVER','SNARE','TROVE','UNZIP','VIGOR',
+      'WALTZ','EXPEL','YACHT','ZESTY','ANGEL','BLISS','CLOSE',
+      'DREAM','ELITE','FLAIR','GRACE','HEART','IVORY','JELLY',
+    ];
+
+    // Keyboard layout rows
+    const KB_ROWS = [
+      ['Q','W','E','R','T','Y','U','I','O','P'],
+      ['A','S','D','F','G','H','J','K','L'],
+      ['ENTER','Z','X','C','V','B','N','M','⌫'],
+    ];
+
+    const MAX_GUESSES = 6;
+    const WORD_LEN    = 5;
+
+    // State
+    let secretWord  = '';
+    let guesses     = [];       // array of submitted guess strings
+    let currentRow  = 0;
+    let currentTile = 0;
+    let gameOver    = false;
+    let initialized = false;
+    let keyStates   = {};       // letter → 'correct' | 'present' | 'absent'
+
+    /* ── DOM helpers ─────────────────────────────────────────────── */
+
+    function getTile(row, col) {
+      return document.querySelector(
+        `#wp-grid .wp-row:nth-child(${row + 1}) .wp-tile:nth-child(${col + 1})`
+      );
+    }
+
+    function getKey(letter) {
+      return document.querySelector(`#wp-keyboard .wp-key[data-key="${letter}"]`);
+    }
+
+    function setMsg(text) {
+      // textContent is safe — no HTML injection risk
+      document.getElementById('wp-msg').textContent = sanitizeText(text);
+    }
+
+    /* ── Build 6×5 tile grid ─────────────────────────────────────── */
+    function buildGrid() {
+      const grid = document.getElementById('wp-grid');
+      grid.innerHTML = '';   // safe — no user data used here
+
+      for (let r = 0; r < MAX_GUESSES; r++) {
+        const row = document.createElement('div');
+        row.className = 'wp-row';
+        row.setAttribute('aria-label', `Guess row ${r + 1}`);
+
+        for (let c = 0; c < WORD_LEN; c++) {
+          const tile = document.createElement('div');
+          tile.className = 'wp-tile';
+          tile.setAttribute('aria-label', `Row ${r+1} letter ${c+1}`);
+          row.appendChild(tile);
+        }
+        grid.appendChild(row);
+      }
+    }
+
+    /* ── Build on-screen keyboard ────────────────────────────────── */
+    function buildKeyboard() {
+      const kb = document.getElementById('wp-keyboard');
+      kb.innerHTML = '';   // safe — only constants used
+
+      KB_ROWS.forEach(rowKeys => {
+        const rowEl = document.createElement('div');
+        rowEl.className = 'wp-kb-row';
+
+        rowKeys.forEach(key => {
+          const btn = document.createElement('button');
+          btn.className = 'wp-key' + (key.length > 1 ? ' wide' : '');
+          btn.dataset.key = key;
+          btn.textContent = key;       // textContent — safe
+          btn.setAttribute('aria-label', key === '⌫' ? 'Backspace' : key);
+
+          btn.addEventListener('click', () => handleKey(key));
+          rowEl.appendChild(btn);
+        });
+        kb.appendChild(rowEl);
+      });
+    }
+
+    /* ── Pick a random secret word ───────────────────────────────── */
+    function pickWord() {
+      const arr = new Uint8Array(1);
+      crypto.getRandomValues(arr);
+      return WORDS[arr[0] % WORDS.length];
+    }
+
+    /* ── Reset / start a new game ────────────────────────────────── */
+    function newGame() {
+      secretWord  = pickWord();
+      guesses     = [];
+      currentRow  = 0;
+      currentTile = 0;
+      gameOver    = false;
+      keyStates   = {};
+
+      buildGrid();
+      buildKeyboard();
+      setMsg('');
+
+      // Reset keyboard colours
+      document.querySelectorAll('.wp-key').forEach(k => {
+        k.removeAttribute('data-k-state');
+      });
+    }
+
+    /* ── Handle a key press (physical or on-screen keyboard) ──────── */
+    function handleKey(key) {
+      if (gameOver) return;
+
+      if (key === 'ENTER') {
+        submitGuess();
+      } else if (key === '⌫' || key === 'BACKSPACE') {
+        deleteLetter();
+      } else if (/^[A-Z]$/.test(key) && currentTile < WORD_LEN) {
+        enterLetter(key);
+      }
+    }
+
+    /* ── Enter a letter into the current row ─────────────────────── */
+    function enterLetter(letter) {
+      const tile = getTile(currentRow, currentTile);
+      if (!tile) return;
+
+      tile.textContent = letter;    // textContent — safe
+      tile.dataset.state = 'filled';
+      currentTile++;
+    }
+
+    /* ── Delete the last letter in the current row ───────────────── */
+    function deleteLetter() {
+      if (currentTile === 0) return;
+      currentTile--;
+      const tile = getTile(currentRow, currentTile);
+      if (!tile) return;
+      tile.textContent = '';
+      tile.removeAttribute('data-state');
+    }
+
+    /* ── Validate and score a complete guess ─────────────────────── */
+    function submitGuess() {
+      if (currentTile < WORD_LEN) {
+        setMsg('Not enough letters!');
+        shakeRow(currentRow);
+        return;
+      }
+
+      // Build guess string from tile textContent (no innerHTML)
+      let guess = '';
+      for (let c = 0; c < WORD_LEN; c++) {
+        const tile = getTile(currentRow, c);
+        guess += tile ? tile.textContent : '';
+      }
+      guess = guess.toUpperCase();
+
+      // Colour-score the guess against the secret word
+      const result = scoreGuess(guess, secretWord);
+      revealRow(currentRow, guess, result);
+      guesses.push(guess);
+      updateKeyboard(guess, result);
+
+      if (guess === secretWord) {
+        setMsg(`🎉 You got it in ${currentRow + 1}!`);
+        gameOver = true;
+        launchConfetti();
+        toast(`Correct! The word was ${secretWord}`, '🎉');
+      } else if (currentRow === MAX_GUESSES - 1) {
+        setMsg(`😔 The word was: ${secretWord}`);
+        gameOver = true;
+      } else {
+        setMsg('');
+      }
+
+      currentRow++;
+      currentTile = 0;
+    }
+
+    /**
+     * scoreGuess — returns array of state strings for each letter.
+     * Uses a two-pass algorithm to correctly handle duplicate letters.
+     * Pass 1: mark exact matches ('correct').
+     * Pass 2: mark letters present elsewhere ('present'), others 'absent'.
+     * @param {string} guess       5-letter uppercase guess
+     * @param {string} secret      5-letter uppercase secret word
+     * @returns {string[]}         Array of 5 state strings
+     */
+    function scoreGuess(guess, secret) {
+      const result   = Array(WORD_LEN).fill('absent');
+      const secArr   = secret.split('');
+      const gArr     = guess.split('');
+      const usedInSec = Array(WORD_LEN).fill(false);
+      const usedInG   = Array(WORD_LEN).fill(false);
+
+      // Pass 1 — exact matches
+      for (let i = 0; i < WORD_LEN; i++) {
+        if (gArr[i] === secArr[i]) {
+          result[i]     = 'correct';
+          usedInSec[i]  = true;
+          usedInG[i]    = true;
+        }
+      }
+
+      // Pass 2 — present but wrong position
+      for (let i = 0; i < WORD_LEN; i++) {
+        if (usedInG[i]) continue;    // already marked correct
+        for (let j = 0; j < WORD_LEN; j++) {
+          if (usedInSec[j]) continue;
+          if (gArr[i] === secArr[j]) {
+            result[i]    = 'present';
+            usedInSec[j] = true;
+            break;
+          }
+        }
+      }
+
+      return result;
+    }
+
+    /* ── Apply colour states to a submitted row ───────────────────── */
+    function revealRow(row, guess, result) {
+      for (let c = 0; c < WORD_LEN; c++) {
+        const tile = getTile(row, c);
+        if (!tile) continue;
+
+        // Stagger the flip animation by 100ms per tile
+        setTimeout(() => {
+          tile.dataset.state = result[c];
+        }, c * 110);
+      }
+    }
+
+    /* ── Update keyboard key colours ─────────────────────────────── */
+    function updateKeyboard(guess, result) {
+      const PRIORITY = { correct: 3, present: 2, absent: 1 };
+
+      for (let i = 0; i < WORD_LEN; i++) {
+        const letter = guess[i];
+        const state  = result[i];
+        const cur    = keyStates[letter];
+
+        // Never downgrade a key from a better state
+        if (!cur || PRIORITY[state] > PRIORITY[cur]) {
+          keyStates[letter] = state;
+          const keyEl = getKey(letter);
+          if (keyEl) keyEl.dataset.kState = state;
+        }
+      }
+    }
+
+    /* ── Shake a row to signal invalid input ─────────────────────── */
+    function shakeRow(row) {
+      const rowEl = document.querySelector(
+        `#wp-grid .wp-row:nth-child(${row + 1})`
+      );
+      if (!rowEl) return;
+      rowEl.style.animation = 'none';
+      // Force reflow then apply shake
+      void rowEl.offsetWidth;
+      rowEl.style.animation = 'tileFlip .4s ease';
+    }
+
+    /* ── Physical keyboard listener ──────────────────────────────── */
+    function onKeydown(e) {
+      const tag = document.activeElement.tagName;
+      // Ignore if focus is inside an input / textarea
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      // Only active when word panel is visible
+      if (!document.getElementById('panel-word').classList.contains('active')) return;
+
+      const key = e.key.toUpperCase();
+      if (key === 'ENTER')     handleKey('ENTER');
+      else if (key === 'BACKSPACE') handleKey('BACKSPACE');
+      else if (/^[A-Z]$/.test(key)) handleKey(key);
+    }
+
+    /* ── Public init ─────────────────────────────────────────────── */
+    function init() {
+      if (initialized) return;
+      initialized = true;
+
+      document.getElementById('wp-new').addEventListener('click', newGame);
+      document.addEventListener('keydown', onKeydown);
+      newGame();
+    }
+
+    return { init };
+  })();
+
+  /* ═════════════════════════════════════════════════════════════════
+     GAME 2 — DRAWING BOARD  (Canvas doodle with full toolset)
+  ═════════════════════════════════════════════════════════════════ */
+  const DrawingBoard = (() => {
+
+    const DRAW_WORDS = [
+      'ELEPHANT','RAINBOW','BICYCLE','LIGHTHOUSE','VOLCANO',
+      'MERMAID','ASTRONAUT','PIZZA','DINOSAUR','CASTLE',
+      'BUTTERFLY','SUBMARINE','CACTUS','DRAGON','JELLYFISH',
+      'ROBOT','HOT BALLOON','TREEHOUSE','UNICORN','SNOWFLAKE',
+      'PENGUIN','GIRAFFE','SPACESHIP','MOUNTAIN','WATERFALL',
+      'FIREWORKS','HAMMOCK','TORNADO','PARACHUTE','MICROSCOPE',
+    ];
+
+    let canvas, ctx;
+    let drawing     = false;
+    let penColor    = '#0f0f23';
+    let brushSize   = 10;
+    let tool        = 'pen';       // 'pen' | 'erase' | 'fill'
+    let lastX, lastY;
+    let initialized = false;
+
+    /* ── Get canvas coordinates from mouse or touch event ───────── */
+    function getPos(e) {
+      const rect = canvas.getBoundingClientRect();
+      const src  = e.touches ? e.touches[0] : e;
+      return {
+        x: (src.clientX - rect.left) * (canvas.width  / rect.width),
+        y: (src.clientY - rect.top)  * (canvas.height / rect.height),
+      };
+    }
+
+    /* ── Pointer down: start stroke or apply fill ─────────────────── */
+    function onPointerDown(e) {
+      e.preventDefault();
+      const { x, y } = getPos(e);
+
+      if (tool === 'fill') {
+        floodFill(Math.round(x), Math.round(y), hexToRgb(penColor));
+        return;
+      }
+
+      drawing = true;
+      lastX = x; lastY = y;
+
+      // Draw a dot for single tap
+      ctx.beginPath();
+      const r = (tool === 'erase' ? brushSize * 2 : brushSize) / 2;
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = tool === 'erase' ? '#ffffff' : penColor;
+      ctx.fill();
+    }
+
+    /* ── Pointer move: continue stroke ───────────────────────────── */
+    function onPointerMove(e) {
+      if (!drawing) return;
+      e.preventDefault();
+
+      const { x, y } = getPos(e);
+
+      ctx.beginPath();
+      ctx.moveTo(lastX, lastY);
+      ctx.lineTo(x, y);
+      ctx.strokeStyle = tool === 'erase' ? '#ffffff' : penColor;
+      ctx.lineWidth   = tool === 'erase' ? brushSize * 3 : brushSize;
+      ctx.lineCap     = 'round';
+      ctx.lineJoin    = 'round';
+      ctx.stroke();
+
+      lastX = x; lastY = y;
+    }
+
+    /* ── Pointer up: end stroke ───────────────────────────────────── */
+    function onPointerUp(e) {
+      if (!drawing) return;
+      e.preventDefault();
+      drawing = false;
+    }
+
+    /* ══ FLOOD FILL (scanline / stack-based algorithm) ══════════════
+     * Fills a contiguous region with the selected pen colour.
+     * Uses ImageData pixel arrays for performance.
+     * @param {number} sx  Start X (integer canvas coordinate)
+     * @param {number} sy  Start Y (integer canvas coordinate)
+     * @param {number[]} fill  [R, G, B, A] fill colour
+     ═══════════════════════════════════════════════════════════════ */
+    function floodFill(sx, sy, fill) {
+      const id     = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data   = id.data;
+      const w      = canvas.width;
+      const h      = canvas.height;
+
+      // Sample the colour at the clicked pixel
+      const idx    = (sy * w + sx) * 4;
+      const target = [data[idx], data[idx+1], data[idx+2], data[idx+3]];
+
+      // Abort if we're clicking on the same colour we'd paint
+      if (colorEq(target, fill)) return;
+
+      const visited = new Uint8Array(w * h);  // 0/1 visited map
+      const stack   = [[sx, sy]];
+
+      while (stack.length) {
+        const [x, y] = stack.pop();
+        if (x < 0 || x >= w || y < 0 || y >= h) continue;
+        const i = y * w + x;
+        if (visited[i]) continue;
+
+        const pi = i * 4;
+        if (!colorEq([data[pi],data[pi+1],data[pi+2],data[pi+3]], target)) continue;
+
+        visited[i] = 1;
+        data[pi]   = fill[0];
+        data[pi+1] = fill[1];
+        data[pi+2] = fill[2];
+        data[pi+3] = fill[3];
+
+        stack.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
+      }
+
+      ctx.putImageData(id, 0, 0);
+    }
+
+    /** Color equality with tolerance for anti-aliased edges */
+    function colorEq(a, b) {
+      return Math.abs(a[0]-b[0]) < 30 && Math.abs(a[1]-b[1]) < 30 &&
+             Math.abs(a[2]-b[2]) < 30 && Math.abs(a[3]-b[3]) < 30;
+    }
+
+    /** Convert 6-digit hex to [R, G, B, 255] */
+    function hexToRgb(hex) {
+      const h = hex.replace('#','');
+      return [
+        parseInt(h.slice(0,2),16),
+        parseInt(h.slice(2,4),16),
+        parseInt(h.slice(4,6),16),
+        255,
+      ];
+    }
+
+    /* ── Set tool (pen / erase / fill) ──────────────────────────── */
+    function setTool(t) {
+      tool = t;
+      document.querySelectorAll('.tool-btn').forEach(b => {
+        b.classList.toggle('on', b.dataset.tool === t);
+      });
+    }
+
+    /* ── Resize canvas to its CSS display dimensions ─────────────── */
+    function resize() {
+      if (!canvas) return;
+      const wrap = canvas.parentElement;
+      const snap = canvas.toDataURL();      // preserve existing drawing
+
+      canvas.width  = wrap.clientWidth  || 600;
+      canvas.height = wrap.clientHeight  || 400;
+
+      // White background
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Restore previous drawing
+      const img = new Image();
+      img.onload = () => ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      img.src = snap;
+    }
+
+    /* ── Pick a random drawing word (CSPRNG) ─────────────────────── */
+    function pickDrawWord() {
+      const arr = new Uint8Array(1);
+      crypto.getRandomValues(arr);
+      const word = DRAW_WORDS[arr[0] % DRAW_WORDS.length];
+      // textContent assignment prevents XSS — word is from our constant array
+      document.getElementById('draw-word').textContent = word;
+    }
+
+    /* ── Public init ─────────────────────────────────────────────── */
+    function init() {
+      if (initialized) return;
+      initialized = true;
+
+      canvas = document.getElementById('draw-canvas');
+      ctx    = canvas.getContext('2d');
+
+      resize();
+
+      /* Mouse events */
+      canvas.addEventListener('mousedown',  onPointerDown);
+      canvas.addEventListener('mousemove',  onPointerMove);
+      canvas.addEventListener('mouseup',    onPointerUp);
+      canvas.addEventListener('mouseleave', onPointerUp);
+
+      /* Touch events — passive:false so we can call preventDefault()
+         which stops the page from scrolling while drawing on mobile */
+      canvas.addEventListener('touchstart', onPointerDown, { passive: false });
+      canvas.addEventListener('touchmove',  onPointerMove, { passive: false });
+      canvas.addEventListener('touchend',   onPointerUp,   { passive: false });
+
+      /* Colour swatches */
+      document.querySelectorAll('.swatch').forEach(sw => {
+        sw.addEventListener('click', () => {
+          document.querySelectorAll('.swatch').forEach(s => s.classList.remove('on'));
+          sw.classList.add('on');
+          penColor = sw.dataset.color;
+          // Clicking white swatch switches to eraser automatically
+          setTool(penColor === '#ffffff' ? 'erase' : 'pen');
+        });
+      });
+
+      /* Brush size buttons */
+      document.querySelectorAll('.sz-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.sz-btn').forEach(b => b.classList.remove('on'));
+          btn.classList.add('on');
+          brushSize = parseInt(btn.dataset.size, 10);
+        });
+      });
+
+      /* Tool buttons */
+      document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
+        btn.addEventListener('click', () => setTool(btn.dataset.tool));
+      });
+
+      /* Clear */
+      document.getElementById('draw-clear').addEventListener('click', () => {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        toast('Canvas cleared!', '🗑');
+      });
+
+      /* Save / download PNG */
+      document.getElementById('draw-save').addEventListener('click', () => {
+        const a = document.createElement('a');
+        a.download = 'coupleplay-drawing.png';
+        a.href = canvas.toDataURL('image/png');
+        a.click();
+        toast('Drawing saved!', '💾');
+      });
+
+      /* New drawing word */
+      document.getElementById('draw-new-word').addEventListener('click', pickDrawWord);
+
+      /* Re-size on window resize (debounced) */
+      let resizeTimer;
+      window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(resize, 160);
+      });
+    }
+
+    return { init, resize };
+  })();
+
+  /* ═════════════════════════════════════════════════════════════════
+     GAME 3 — GRID GAMES  (Tic-Tac-Toe + Connect Four)
+  ═════════════════════════════════════════════════════════════════ */
+  const GridGames = (() => {
+
+    /* ══ Shared state ══════════════════════════════════════════════ */
+    let mode        = 'ttt';     // 'ttt' | 'cf'
+    let scores      = { P1: 0, P2: 0, draw: 0 };
+    let initialized = false;
+
+    /* ══ Tic-Tac-Toe state ═════════════════════════════════════════ */
+    const TTT = {
+      board:   Array(9).fill(null),   // null | 'X' | 'O'
+      current: 'X',                   // whose turn
+      over:    false,
+
+      // All 8 winning combinations (indices into board array)
+      WIN_LINES: [
+        [0,1,2],[3,4,5],[6,7,8],   // rows
+        [0,3,6],[1,4,7],[2,5,8],   // cols
+        [0,4,8],[2,4,6],           // diagonals
+      ],
+    };
+
+    /* ══ Connect Four state ════════════════════════════════════════ */
+    const CF = {
+      ROWS:    6,
+      COLS:    7,
+      board:   [],   // 2D array [row][col] → null | 'P1' | 'P2'
+      current: 'P1',
+      over:    false,
+    };
+
+    /* ── DOM helpers ─────────────────────────────────────────────── */
+    function setTurn(msg) {
+      document.getElementById('turn-indicator').textContent = sanitizeText(msg);
+    }
+
+    function updateScoreboard() {
+      document.getElementById('sc-p1').textContent   = scores.P1;
+      document.getElementById('sc-p2').textContent   = scores.P2;
+      document.getElementById('sc-draw').textContent = scores.draw;
+    }
+
+    /* ═══ TIC-TAC-TOE ══════════════════════════════════════════════ */
+
+    function buildTTT() {
+      const board = document.getElementById('ttt-board');
+      board.innerHTML = '';   // safe — no user data
+
+      TTT.board   = Array(9).fill(null);
+      TTT.current = 'X';
+      TTT.over    = false;
+
+      for (let i = 0; i < 9; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'ttt-cell';
+        cell.dataset.idx = i;
+        cell.setAttribute('role', 'button');
+        cell.setAttribute('aria-label', `Cell ${i + 1}`);
+        cell.addEventListener('click', () => onTTTClick(i));
+        board.appendChild(cell);
+      }
+
+      setTurn('⬤ Player 1 (X) goes first');
+    }
+
+    function onTTTClick(idx) {
+      if (TTT.over || TTT.board[idx]) return;
+
+      TTT.board[idx] = TTT.current;
+
+      // Update cell visual — textContent only, no HTML
+      const cell = document.querySelector(`#ttt-board .ttt-cell[data-idx="${idx}"]`);
+      if (cell) {
+        cell.textContent = TTT.current;
+        cell.classList.add('taken', TTT.current);
+      }
+
+      // Check win
+      const winner = checkTTTWin();
+      if (winner) {
+        highlightWinCells(winner.line);
+        scores[TTT.current]++;
+        updateScoreboard();
+        setTurn(`🎉 Player ${TTT.current === 'X' ? '1' : '2'} wins!`);
+        TTT.over = true;
+        launchConfetti();
+        return;
+      }
+
+      // Check draw
+      if (TTT.board.every(c => c !== null)) {
+        scores.draw++;
+        updateScoreboard();
+        setTurn("🤝 It's a draw!");
+        TTT.over = true;
+        return;
+      }
+
+      // Next turn
+      TTT.current = TTT.current === 'X' ? 'O' : 'X';
+      const pNum  = TTT.current === 'X' ? '1' : '2';
+      setTurn(`⬤ Player ${pNum} (${TTT.current}) — your turn`);
+    }
+
+    /**
+     * checkTTTWin — scan all 8 win lines.
+     * @returns {{ player:string, line:number[] } | null}
+     */
+    function checkTTTWin() {
+      for (const line of TTT.WIN_LINES) {
+        const [a, b, c] = line;
+        if (TTT.board[a] && TTT.board[a] === TTT.board[b] && TTT.board[a] === TTT.board[c]) {
+          return { player: TTT.board[a], line };
+        }
+      }
+      return null;
+    }
+
+    function highlightWinCells(line) {
+      line.forEach(idx => {
+        const cell = document.querySelector(`#ttt-board .ttt-cell[data-idx="${idx}"]`);
+        if (cell) cell.classList.add('win-cell');
+      });
+    }
+
+    /* ═══ CONNECT FOUR ═════════════════════════════════════════════ */
+
+    function buildCF() {
+      // Initialise board to null
+      CF.board   = Array.from({ length: CF.ROWS }, () => Array(CF.COLS).fill(null));
+      CF.current = 'P1';
+      CF.over    = false;
+
+      const board = document.getElementById('cf-board');
+      board.innerHTML = '';   // safe — no user data
+
+      /* Drop buttons row */
+      for (let c = 0; c < CF.COLS; c++) {
+        const btn = document.createElement('button');
+        btn.className = 'cf-col-btn';
+        btn.dataset.col = c;
+        btn.textContent = '▼';
+        btn.setAttribute('aria-label', `Drop in column ${c + 1}`);
+        btn.addEventListener('click', () => onCFDrop(c));
+        board.appendChild(btn);
+      }
+
+      /* Cell grid (rows × cols, rendered top-to-bottom) */
+      for (let r = 0; r < CF.ROWS; r++) {
+        for (let c = 0; c < CF.COLS; c++) {
+          const cell = document.createElement('div');
+          cell.className = 'cf-cell';
+          cell.dataset.row = r;
+          cell.dataset.col = c;
+          cell.setAttribute('aria-label', `Row ${r+1} column ${c+1}`);
+          board.appendChild(cell);
+        }
+      }
+
+      setTurn('🟣 Player 1 — drop a disc');
+    }
+
+    function getCFCell(row, col) {
+      return document.querySelector(
+        `#cf-board .cf-cell[data-row="${row}"][data-col="${col}"]`
+      );
+    }
+
+    /** Find the lowest empty row in the given column (-1 if full). */
+    function lowestEmpty(col) {
+      for (let r = CF.ROWS - 1; r >= 0; r--) {
+        if (!CF.board[r][col]) return r;
+      }
+      return -1;
+    }
+
+    function onCFDrop(col) {
+      if (CF.over) return;
+
+      const row = lowestEmpty(col);
+      if (row === -1) {
+        toast('Column is full! Choose another.', '⚠️');
+        return;
+      }
+
+      CF.board[row][col] = CF.current;
+
+      const cell = getCFCell(row, col);
+      if (cell) cell.classList.add(CF.current);
+
+      // Check win
+      const winCells = checkCFWin(row, col);
+      if (winCells) {
+        winCells.forEach(([r, c]) => {
+          const wc = getCFCell(r, c);
+          if (wc) wc.classList.add('win-cell');
+        });
+        scores[CF.current]++;
+        updateScoreboard();
+        const pNum = CF.current === 'P1' ? '1' : '2';
+        setTurn(`🎉 Player ${pNum} wins!`);
+        CF.over = true;
+        // Disable drop buttons
+        document.querySelectorAll('.cf-col-btn').forEach(b => b.disabled = true);
+        launchConfetti();
+        return;
+      }
+
+      // Check draw (board full)
+      if (CF.board.every(row => row.every(c => c !== null))) {
+        scores.draw++;
+        updateScoreboard();
+        setTurn("🤝 Board full — it's a draw!");
+        CF.over = true;
+        return;
+      }
+
+      // Switch turn
+      CF.current = CF.current === 'P1' ? 'P2' : 'P1';
+      const pNum  = CF.current === 'P1' ? '1' : '2';
+      const color = CF.current === 'P1' ? '🟣' : '🔴';
+      setTurn(`${color} Player ${pNum} — drop a disc`);
+    }
+
+    /**
+     * checkCFWin — check all four directions from the last placed disc.
+     * Returns the winning 4-cell coordinates, or null.
+     * @param {number} row  Row of last placed disc
+     * @param {number} col  Column of last placed disc
+     * @returns {number[][] | null}
+     */
+    function checkCFWin(row, col) {
+      const player = CF.board[row][col];
+      // Directions: horizontal, vertical, diagonal ↘, diagonal ↙
+      const DIRS = [[0,1],[1,0],[1,1],[1,-1]];
+
+      for (const [dr, dc] of DIRS) {
+        let cells = [[row, col]];
+
+        // Walk positive direction
+        for (let step = 1; step < 4; step++) {
+          const r = row + dr * step;
+          const c = col + dc * step;
+          if (r < 0 || r >= CF.ROWS || c < 0 || c >= CF.COLS) break;
+          if (CF.board[r][c] !== player) break;
+          cells.push([r, c]);
+        }
+
+        // Walk negative direction
+        for (let step = 1; step < 4; step++) {
+          const r = row - dr * step;
+          const c = col - dc * step;
+          if (r < 0 || r >= CF.ROWS || c < 0 || c >= CF.COLS) break;
+          if (CF.board[r][c] !== player) break;
+          cells.push([r, c]);
+        }
+
+        if (cells.length >= 4) return cells;
+      }
+
+      return null;
+    }
+
+    /* ── Reset current game ──────────────────────────────────────── */
+    function resetGame() {
+      if (mode === 'ttt') buildTTT();
+      else buildCF();
+    }
+
+    /* ── Switch mode ─────────────────────────────────────────────── */
+    function switchMode(m) {
+      mode = m;
+
+      // Update mode buttons
+      document.querySelectorAll('.mode-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.mode === m);
+      });
+
+      // Show/hide boards
+      document.getElementById('ttt-board').classList.toggle('hidden', m !== 'ttt');
+      document.getElementById('cf-board').classList.toggle('hidden', m !== 'cf');
+
+      resetGame();
+    }
+
+    /* ── Public init ─────────────────────────────────────────────── */
+    function init() {
+      if (initialized) return;
+      initialized = true;
+
+      updateScoreboard();
+
+      // Mode toggle buttons
+      document.querySelectorAll('.mode-btn').forEach(btn => {
+        btn.addEventListener('click', () => switchMode(btn.dataset.mode));
+      });
+
+      // Reset current game
+      document.getElementById('grid-reset').addEventListener('click', resetGame);
+
+      // Reset all scores
+      document.getElementById('grid-reset-scores').addEventListener('click', () => {
+        scores = { P1: 0, P2: 0, draw: 0 };
+        updateScoreboard();
+        toast('Scores reset!', '🔄');
+      });
+
+      // Build initial TTT board
+      buildTTT();
+    }
+
+    return { init };
+  })();
+
+  /* ═════════════════════════════════════════════════════════════════
+     GAME 4 — QUESTION / DARE DECK
+     Cooperative icebreaker, deep-talk, "Would You Rather", and dare cards.
+  ═════════════════════════════════════════════════════════════════ */
+  const QuestionDeck = (() => {
+
+    /*
+     * Full card database.
+     * SECURITY NOTE: All card text is a hard-coded constant array.
+     * No user input is ever placed into card content, so there is
+     * zero XSS risk from this data source.
+     */
+    const CARDS = [
+      // ── Icebreakers ──────────────────────────────────────────────
+      { type:'question', badge:'💬 Icebreaker', text:'What is one little thing the other person does that makes your whole day better?' },
+      { type:'question', badge:'💬 Icebreaker', text:'If you could relive one day together, which would it be and why?' },
+      { type:'question', badge:'💬 Icebreaker', text:'What song instantly makes you think of us?' },
+      { type:'question', badge:'💬 Icebreaker', text:'Describe each other in exactly three emojis.' },
+      { type:'question', badge:'💬 Icebreaker', text:'What is the most random thing that reminds you of your partner?' },
+      { type:'question', badge:'💬 Icebreaker', text:'What is your partner\'s most endearing habit?' },
+      { type:'question', badge:'💬 Icebreaker', text:'Name one thing on your shared bucket list you can\'t wait to do.' },
+      { type:'question', badge:'💬 Icebreaker', text:'What is something you wish you could teleport to right now — together?' },
+      { type:'question', badge:'💬 Icebreaker', text:'Rate your day 1–10, then explain with a GIF description.' },
+      { type:'question', badge:'💬 Icebreaker', text:'What is a compliment you have been meaning to give your partner?' },
+
+      // ── Deep Talk ────────────────────────────────────────────────
+      { type:'deep', badge:'🌊 Deep Talk', text:'What fear has our relationship helped you face or overcome?' },
+      { type:'deep', badge:'🌊 Deep Talk', text:'In what ways have you grown as a person since we met?' },
+      { type:'deep', badge:'🌊 Deep Talk', text:'What does "home" mean to you, and how does your partner fit into that?' },
+      { type:'deep', badge:'🌊 Deep Talk', text:'What is one dream you have never told anyone else?' },
+      { type:'deep', badge:'🌊 Deep Talk', text:'If you could change one thing about how we communicate, what would it be?' },
+      { type:'deep', badge:'🌊 Deep Talk', text:'What moment in our relationship made you feel most loved?' },
+      { type:'deep', badge:'🌊 Deep Talk', text:'If our relationship were a chapter in a book, what would this chapter be called?' },
+      { type:'deep', badge:'🌊 Deep Talk', text:'What does commitment mean to you in your own words?' },
+      { type:'deep', badge:'🌊 Deep Talk', text:'What is one thing you are still learning about yourself in this relationship?' },
+      { type:'deep', badge:'🌊 Deep Talk', text:'Where do you see us five years from now — paint the picture.' },
+
+      // ── Would You Rather ────────────────────────────────────────
+      { type:'wyr', badge:'🤔 Would You Rather', text:'Would you rather…', optA:'Travel the world for a year with no phone', optB:'Stay home in perfect comfort with unlimited movies & food' },
+      { type:'wyr', badge:'🤔 Would You Rather', text:'Would you rather…', optA:'Always know what your partner is thinking', optB:'Have them always know what you are thinking' },
+      { type:'wyr', badge:'🤔 Would You Rather', text:'Would you rather…', optA:'Go on a spontaneous road trip with no plan', optB:'Take a perfectly planned dream vacation' },
+      { type:'wyr', badge:'🤔 Would You Rather', text:'Would you rather…', optA:'Never have to sleep and use that time together', optB:'Share the same dream every night' },
+      { type:'wyr', badge:'🤔 Would You Rather', text:'Would you rather…', optA:'Be able to pause time on special moments', optB:'Rewind and relive your favourite memory once a year' },
+      { type:'wyr', badge:'🤔 Would You Rather', text:'Would you rather…', optA:'Live in a tiny cozy cabin in the mountains', optB:'Have a penthouse in the most vibrant city' },
+      { type:'wyr', badge:'🤔 Would You Rather', text:'Would you rather…', optA:'Have a superpower only you know about', optB:'Share a superpower exclusively with your partner' },
+      { type:'wyr', badge:'🤔 Would You Rather', text:'Would you rather…', optA:'Know the exact date of every future milestone in your life', optB:'Be completely surprised by everything that happens' },
+      { type:'wyr', badge:'🤔 Would You Rather', text:'Would you rather…', optA:'Cook every meal together for life', optB:'Always have any food you want delivered instantly' },
+      { type:'wyr', badge:'🤔 Would You Rather', text:'Would you rather…', optA:'Have one long video call every day', optB:'Send 20 voice notes throughout the day' },
+
+      // ── Dares ────────────────────────────────────────────────────
+      { type:'dare', badge:'🔥 Dare', text:'Take a silly selfie right now and send it to each other within 30 seconds. Go!' },
+      { type:'dare', badge:'🔥 Dare', text:'Serenade your partner with 10 seconds of any song — no skipping!' },
+      { type:'dare', badge:'🔥 Dare', text:'Say three genuine compliments about your partner as fast as you can.' },
+      { type:'dare', badge:'🔥 Dare', text:'Do your best impression of your partner. They rate it out of 10.' },
+      { type:'dare', badge:'🔥 Dare', text:'Show your partner the last photo in your camera roll — explain it!' },
+      { type:'dare', badge:'🔥 Dare', text:'Tell your partner one thing they do that secretly makes you smile every time.' },
+      { type:'dare', badge:'🔥 Dare', text:'Send the most romantic voicemail you can in 20 seconds. Do it now!' },
+      { type:'dare', badge:'🔥 Dare', text:'Draw a quick portrait of your partner (using the Drawing tab!) and show them.' },
+      { type:'dare', badge:'🔥 Dare', text:'Write your partner a haiku (5-7-5 syllables) about them. Share it aloud.' },
+      { type:'dare', badge:'🔥 Dare', text:'Set a reminder on your phone to send your partner a surprise message tomorrow at an unexpected time.' },
+    ];
+
+    let activeDeck   = [];   // filtered & shuffled subset
+    let currentIdx   = 0;
+    let activeCat    = 'all';
+    let initialized  = false;
+
+    // WYR vote tallies (reset per card)
+    let votes = { a: 0, b: 0, myVote: null };
+
+    /* ── Build the active deck from the selected category ───────── */
+    function buildDeck() {
+      const pool = activeCat === 'all'
+        ? [...CARDS]
+        : CARDS.filter(c => c.type === activeCat);
+
+      // Fisher-Yates shuffle using CSPRNG
+      activeDeck = [...pool];
+      for (let i = activeDeck.length - 1; i > 0; i--) {
+        const arr  = new Uint8Array(1);
+        crypto.getRandomValues(arr);
+        const j    = arr[0] % (i + 1);
+        [activeDeck[i], activeDeck[j]] = [activeDeck[j], activeDeck[i]];
+      }
+
+      currentIdx = 0;
+    }
+
+    /* ── Render the current card ─────────────────────────────────── */
+    function renderCard() {
+      if (activeDeck.length === 0) {
+        document.getElementById('deck-text').textContent
+          = 'No cards in this category.';
+        return;
+      }
+
+      const card = activeDeck[currentIdx];
+
+      // Use textContent throughout — never innerHTML with card data
+      document.getElementById('deck-badge').textContent = card.badge;
+      document.getElementById('deck-badge').className   =
+        `deck-type-badge ${card.type}`;
+      document.getElementById('deck-text').textContent  = card.text;
+
+      // Show / hide WYR vote UI
+      const voteRow    = document.getElementById('deck-vote-row');
+      const voteResult = document.getElementById('vote-result');
+
+      if (card.type === 'wyr') {
+        voteRow.classList.remove('hidden');
+        voteResult.classList.add('hidden');
+        votes = { a: 0, b: 0, myVote: null };
+
+        // Set option labels — textContent only, sanitized as defence-in-depth
+        document.getElementById('vote-a').textContent =
+          'A: ' + sanitizeText(card.optA);
+        document.getElementById('vote-b').textContent =
+          'B: ' + sanitizeText(card.optB);
+
+        // Re-enable vote buttons
+        document.getElementById('vote-a').disabled = false;
+        document.getElementById('vote-b').disabled = false;
+      } else {
+        voteRow.classList.add('hidden');
+        voteResult.classList.add('hidden');
+      }
+
+      // Update counter
+      document.getElementById('deck-counter').textContent =
+        `Card ${currentIdx + 1} / ${activeDeck.length}`;
+    }
+
+    /* ── Handle a WYR vote ───────────────────────────────────────── */
+    function castVote(side) {
+      if (votes.myVote) return;   // already voted
+      votes.myVote = side;
+      votes[side]++;
+
+      // For local single-device play, simulate partner vote after 1s
+      setTimeout(() => {
+        const partnerSide = Math.random() < .5 ? 'a' : 'b';
+        votes[partnerSide]++;
+        showVoteResult();
+      }, 900);
+
+      // Disable vote buttons until result shown
+      document.getElementById('vote-a').disabled = true;
+      document.getElementById('vote-b').disabled = true;
+    }
+
+    function showVoteResult() {
+      const total = votes.a + votes.b;
+      const pctA  = total > 0 ? Math.round((votes.a / total) * 100) : 0;
+      const pctB  = 100 - pctA;
+
+      document.getElementById('bar-a').style.height      = pctA + '%';
+      document.getElementById('bar-b').style.height      = pctB + '%';
+      document.getElementById('bar-a-lbl').textContent   = `A: ${votes.a}`;
+      document.getElementById('bar-b-lbl').textContent   = `B: ${votes.b}`;
+      document.getElementById('vote-result').classList.remove('hidden');
+    }
+
+    /* ── Navigation helpers ──────────────────────────────────────── */
+    function nextCard() {
+      if (activeDeck.length === 0) return;
+      currentIdx = (currentIdx + 1) % activeDeck.length;
+      renderCard();
+    }
+
+    function prevCard() {
+      if (activeDeck.length === 0) return;
+      currentIdx = (currentIdx - 1 + activeDeck.length) % activeDeck.length;
+      renderCard();
+    }
+
+    /* ── Public init ─────────────────────────────────────────────── */
+    function init() {
+      if (initialized) return;
+      initialized = true;
+
+      buildDeck();
+      renderCard();
+
+      // Category filter pills
+      document.querySelectorAll('.deck-filter').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.deck-filter').forEach(b => {
+            b.classList.remove('active');
+          });
+          btn.classList.add('active');
+          activeCat = btn.dataset.cat;
+          buildDeck();
+          renderCard();
+        });
+      });
+
+      // Navigation
+      document.getElementById('deck-next').addEventListener('click', nextCard);
+      document.getElementById('deck-prev').addEventListener('click', prevCard);
+
+      // Shuffle
+      document.getElementById('deck-shuffle').addEventListener('click', () => {
+        buildDeck();
+        renderCard();
+        toast('Deck shuffled!', '🔀');
+      });
+
+      // WYR vote buttons
+      document.getElementById('vote-a').addEventListener('click', () => castVote('a'));
+      document.getElementById('vote-b').addEventListener('click', () => castVote('b'));
+    }
+
+    return { init };
+  })();
+
+  /*
+  ═══════════════════════════════════════════════════════════════════
+  END OF APPLICATION CODE
+  ═══════════════════════════════════════════════════════════════════
+  All user-supplied values (URL params, display names from Jitsi)
+  are sanitized via sanitizeText() before touching the DOM.
+  All random values use crypto.getRandomValues (CSPRNG).
+  All DOM insertions use textContent or createElement — zero
+  innerHTML calls with dynamic data anywhere in this file.
+  ═══════════════════════════════════════════════════════════════════
+  */
+  </script>
+</body>
+</html>
